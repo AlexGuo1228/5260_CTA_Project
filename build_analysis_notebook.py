@@ -169,7 +169,7 @@ save_csv(pd.DataFrame(coverage_rows), 'quality', 'monthly_price_coverage.csv', F
 display(raw_monthly_returns.tail())
 ''')
 
-code("## 5. Instrument Selection, Reference Reconstruction, and Reconciliation\nPurpose: produce two explicitly distinguished datasets.\n\n* **58-column reference reconstruction:** retain the reference table's columns.\n  Starting in December 2008, use ER's own monthly returns for RL.\n  Calculate each raw instrument's returns first, then select the return source by month;\n  do not splice price levels with potentially different scales.\n* **57-column economic-instrument dataset:** remove YM from the reconstruction and retain ZD for Dow Jones\n  to avoid counting that index exposure twice. Retain SP from SP/ES/SC and ND from ND/EN.\n  Join RL/ER using the switch above. Do not automatically merge MW and ZW merely because both reference wheat,\n  or treat other similar instrument names as identical contracts.\n\nThese are transparent, editable analysis choices. In particular, the Dow Jones exclusion and other candidate\nrelationships should be checked against course requirements. Excluding an alternative instrument does not\nautomatically use it to fill gaps in the retained instrument.\n\nReconciliation checks both numeric differences and missingness. Matching all jointly observed values\ndoes not imply identical tables. Values reconstructed from raw prices where the reference is missing are retained\nand labeled `reference_missing`; these are calculated observations, not statistical imputations.", r'''
+code("## 5. Instrument Selection, Reference Reconstruction, and Reconciliation\nPurpose: produce two explicitly distinguished datasets.\n\n* **58-column reference reconstruction:** retain the reference table's columns.\n  Starting in December 2008, use ER's own monthly returns for RL.\n  Calculate each raw instrument's returns first, then select the return source by month;\n  do not splice price levels with potentially different scales.\n* **57-column economic-instrument dataset:** remove YM from the reconstruction and retain ZD for Dow Jones\n  to avoid counting that index exposure twice. Retain SP from SP/ES/SC and ND from ND/EN.\n  Join RL/ER using the switch above. Do not automatically merge MW and ZW merely because both reference wheat,\n  or treat other similar instrument names as identical contracts.\n\nThese are transparent, editable analysis choices. In particular, the Dow Jones exclusion and other candidate\nrelationships should be checked against course requirements. Excluding an alternative instrument does not\nautomatically use it to fill gaps in the retained instrument.\n\nReconciliation checks both numeric differences and missingness. Matching all jointly observed values\ndoes not imply identical tables. Values reconstructed from raw prices where the reference is missing are retained\nand labeled `reference_missing`; these are calculated observations, not statistical imputations.\n\n### Required reconstruction versus optional deduplication\n\nThe primary deliverable follows the supplied reference table's 58 instrument columns.\nThe screenshot requests return reconstruction, duplicate/merge handling, and exploratory analysis;\nit does not mandate 57 instruments. The 57-column dataset is an additional modeling choice,\nnot the uniquely correct universe or a replacement for the reference-compatible deliverable.\n\n| Candidate group | Reference-compatible rule | Reduction from 62 raw columns |\n| --- | --- | ---: |\n| SP / ES / SC | Retain SP | 2 |\n| ND / EN | Retain ND | 1 |\n| RL / ER | Retain RL through 2008-11; use ER monthly returns from 2008-12 under the RL column | 1 |\n| ZD / YM | Retain BOTH in the primary 58-column deliverable | 0 |\n\nThus, 62 - 2 - 1 - 1 = 58. Excluding YM while retaining ZD produces the optional\n57-column economic-exposure dataset. This can avoid double-weighting Dow Jones in an\nanalysis portfolio, but should be justified explicitly and is not required by the screenshot.\nRetain separate contracts when investigating differences between contract variants.\nThe existing instrument/class statistics and charts in Sections 6-8 use the optional\n57-column dataset; they are supplementary, not evidence that the primary CSV has 57 columns.\n\n### Primary cleaned CSV exports\n\n- `MonthlyReturns.csv` in the project root is the primary reconstructed 58-column deliverable.\n- `data/MonthlyReturns_cleaned.csv` is a byte-identical copy.\n- `data/MonthlyReturns.csv` remains the untouched original reference input.\n\nThe primary exports retain the reference column order, row order, date labels, and unnamed\nfirst date column for compatibility. Dates are aligned by calendar month internally.\nAll reference-observed values are reconstructed from raw prices and checked within 1e-6;\n32 reference-missing values can be calculated from available raw month-end prices and are retained.\nNo interpolation, zero filling, forward filling, winsorization, or automatic outlier deletion is applied.\nPre-history missing values remain blank, and instrument start dates are not artificially equalized.\nThe 75-month common sample is a separate comparison dataset, not the primary export.\n", r'''
 # Purpose: Apply explicit selection rules and record monthly return provenance and reconciliation.
 rules = pd.DataFrame([
     ['SP','SP / ES / SC','SP','all','retain SP; exclude mini/alternative series'],
@@ -186,6 +186,22 @@ provenance.loc[calendar >= switch, 'RL'] = 'ER'
 provenance = provenance.where(recreated.notna())
 unique_returns = recreated.drop(columns=['YM']).copy()
 save_csv(recreated, 'returns', 'monthly_returns_recreated_58.csv')
+
+# Export the primary 58-column deliverable using the reference CSV layout.
+# Keep the original input in data/MonthlyReturns.csv unchanged.
+reference_layout = pd.read_csv(DATA / 'MonthlyReturns.csv', index_col=0)
+export_months = pd.to_datetime(reference_layout.index).to_period('M')
+primary_export = recreated.reindex(index=export_months, columns=reference_layout.columns).copy()
+primary_export.index = reference_layout.index.copy()
+primary_export.index.name = reference_layout.index.name
+primary_path = ROOT / 'MonthlyReturns.csv'
+cleaned_copy_path = DATA / 'MonthlyReturns_cleaned.csv'
+primary_export.to_csv(primary_path, encoding='utf-8-sig')
+cleaned_copy_path.write_bytes(primary_path.read_bytes())
+assert primary_export.shape == reference_layout.shape
+assert primary_export.columns.tolist() == reference_layout.columns.tolist()
+assert primary_path.read_bytes() == cleaned_copy_path.read_bytes()
+
 save_csv(unique_returns, 'returns', 'monthly_returns_unique_57.csv')
 save_csv(provenance, 'returns', 'monthly_return_source.csv')
 all_months = reference.index.union(recreated.index).sort_values()
@@ -397,7 +413,9 @@ report=f"""# Futures Data Analysis Results
 ## Methodology
 - Returns are adjacent month-end Close ratios minus one. Missing prices are not forward-filled; dates are aligned by calendar month.
 - Starting in {switch}, RL uses ER's own monthly returns. Price levels are not spliced directly.
-- The unique-instrument analysis excludes YM and retains ZD for Dow Jones; SP and ND represent their respective ordinary/mini candidate groups.
+- The primary exports MonthlyReturns.csv and data/MonthlyReturns_cleaned.csv retain all 58 reference columns, including both ZD and YM. The two files are byte-identical.
+- The optional 57-column analysis excludes YM and retains ZD for Dow Jones. This is an additional modeling choice, not a requirement of the screenshot. SP and ND represent their respective ordinary/mini candidate groups.
+- The primary exports preserve the reference date labels and column order, retaining 32 reconstructable reference-missing values without statistical imputation. The original data/MonthlyReturns.csv remains unchanged.
 - Asset classes equally weight instruments with observed returns each month and rebalance monthly. Actual weights are saved in returns/asset_class_weights.csv.
 - Quoted currencies are not converted to USD. Continuous-contract adjustment and roll methods require clarification from the course data provider.
 - Full-history samples differ across instruments; the common observed sample contains {len(common)} months.

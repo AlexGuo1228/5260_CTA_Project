@@ -10,7 +10,9 @@
 ## Methodology
 - Returns are adjacent month-end Close ratios minus one. Missing prices are not forward-filled; dates are aligned by calendar month.
 - Starting in 2008-12, RL uses ER's own monthly returns. Price levels are not spliced directly.
-- The unique-instrument analysis excludes YM and retains ZD for Dow Jones; SP and ND represent their respective ordinary/mini candidate groups.
+- The primary exports MonthlyReturns.csv and data/MonthlyReturns_cleaned.csv retain all 58 reference columns, including both ZD and YM. The two files are byte-identical.
+- The optional 57-column analysis excludes YM and retains ZD for Dow Jones. This is an additional modeling choice, not a requirement of the screenshot. SP and ND represent their respective ordinary/mini candidate groups.
+- The primary exports preserve the reference date labels and column order, retaining 32 reconstructable reference-missing values without statistical imputation. The original data/MonthlyReturns.csv remains unchanged.
 - Asset classes equally weight instruments with observed returns each month and rebalance monthly. Actual weights are saved in returns/asset_class_weights.csv.
 - Quoted currencies are not converted to USD. Continuous-contract adjustment and roll methods require clarification from the course data provider.
 - Full-history samples differ across instruments; the common observed sample contains 75 months.
