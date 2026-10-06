@@ -1,0 +1,5 @@
+﻿canonical,candidates,selected,switch_month,rule
+SP,SP / ES / SC,SP,all,retain SP; exclude mini/alternative series
+ND,ND / EN,ND,all,retain ND
+RL,RL / ER,RL then ER,2008-12,select ER monthly returns from switch month
+ZD,ZD / YM,ZD,all,exclude YM only from unique-economic analysis

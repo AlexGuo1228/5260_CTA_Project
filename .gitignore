@@ -1,0 +1,14 @@
+# Local Python dependencies and runtime state
+.analysis_packages/
+.ipython/
+.jupyter_kernels/
+.jupyter_runtime/
+.matplotlib_cache/
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.rerun_baseline.json
+.DS_Store
+Thumbs.db
