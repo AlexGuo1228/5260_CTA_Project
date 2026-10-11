@@ -12,3 +12,4 @@ venv/
 .rerun_baseline.json
 .DS_Store
 Thumbs.db
+.pytest_cache/

@@ -169,13 +169,13 @@ save_csv(pd.DataFrame(coverage_rows), 'quality', 'monthly_price_coverage.csv', F
 display(raw_monthly_returns.tail())
 ''')
 
-code("## 5. Instrument Selection, Reference Reconstruction, and Reconciliation\nPurpose: produce two explicitly distinguished datasets.\n\n* **58-column reference reconstruction:** retain the reference table's columns.\n  Starting in December 2008, use ER's own monthly returns for RL.\n  Calculate each raw instrument's returns first, then select the return source by month;\n  do not splice price levels with potentially different scales.\n* **57-column economic-instrument dataset:** remove YM from the reconstruction and retain ZD for Dow Jones\n  to avoid counting that index exposure twice. Retain SP from SP/ES/SC and ND from ND/EN.\n  Join RL/ER using the switch above. Do not automatically merge MW and ZW merely because both reference wheat,\n  or treat other similar instrument names as identical contracts.\n\nThese are transparent, editable analysis choices. In particular, the Dow Jones exclusion and other candidate\nrelationships should be checked against course requirements. Excluding an alternative instrument does not\nautomatically use it to fill gaps in the retained instrument.\n\nReconciliation checks both numeric differences and missingness. Matching all jointly observed values\ndoes not imply identical tables. Values reconstructed from raw prices where the reference is missing are retained\nand labeled `reference_missing`; these are calculated observations, not statistical imputations.\n\n### Required reconstruction versus optional deduplication\n\nThe primary deliverable follows the supplied reference table's 58 instrument columns.\nThe screenshot requests return reconstruction, duplicate/merge handling, and exploratory analysis;\nit does not mandate 57 instruments. The 57-column dataset is an additional modeling choice,\nnot the uniquely correct universe or a replacement for the reference-compatible deliverable.\n\n| Candidate group | Reference-compatible rule | Reduction from 62 raw columns |\n| --- | --- | ---: |\n| SP / ES / SC | Retain SP | 2 |\n| ND / EN | Retain ND | 1 |\n| RL / ER | Retain RL through 2008-11; use ER monthly returns from 2008-12 under the RL column | 1 |\n| ZD / YM | Retain BOTH in the primary 58-column deliverable | 0 |\n\nThus, 62 - 2 - 1 - 1 = 58. Excluding YM while retaining ZD produces the optional\n57-column economic-exposure dataset. This can avoid double-weighting Dow Jones in an\nanalysis portfolio, but should be justified explicitly and is not required by the screenshot.\nRetain separate contracts when investigating differences between contract variants.\nThe existing instrument/class statistics and charts in Sections 6-8 use the optional\n57-column dataset; they are supplementary, not evidence that the primary CSV has 57 columns.\n\n### Primary cleaned CSV exports\n\n- `MonthlyReturns.csv` in the project root is the primary reconstructed 58-column deliverable.\n- `data/MonthlyReturns_cleaned.csv` is a byte-identical copy.\n- `data/MonthlyReturns.csv` remains the untouched original reference input.\n\nThe primary exports retain the reference column order, row order, date labels, and unnamed\nfirst date column for compatibility. Dates are aligned by calendar month internally.\nAll reference-observed values are reconstructed from raw prices and checked within 1e-6;\n32 reference-missing values can be calculated from available raw month-end prices and are retained.\nNo interpolation, zero filling, forward filling, winsorization, or automatic outlier deletion is applied.\nPre-history missing values remain blank, and instrument start dates are not artificially equalized.\nThe 75-month common sample is a separate comparison dataset, not the primary export.\n", r'''
+code("## 5. Instrument Selection, Reference Reconstruction, and Reconciliation\nPurpose: rebuild the course's 58-column monthly return table from raw prices and reconcile it.\n\nInstrument merging follows the course rule (Lecture 4, \"Futures Data: Cleaning\"): different futures on the same\neconomic exposure are combined (`dup_instruments = ['EN','ER','ES','SC']`), and instruments without usable data\nare excluded (`bad_instruments = ['BC','BG','ZH','FF']`). Returns are computed per raw instrument first and the\nsource is selected by month; price levels are never spliced.\n\n| Candidate group | Rule | Reduction from 62 raw columns |\n| --- | --- | ---: |\n| SP / ES / SC | Retain SP | 2 |\n| ND / EN | Retain ND | 1 |\n| RL / ER | Retain RL through 2008-11; use ER monthly returns from 2008-12 under the RL column | 1 |\n\nThus, 62 - 2 - 1 - 1 = 58, the course universe. No further instruments are removed; all statistics and charts\nbelow use these 58 columns.\n\nReconciliation checks both numeric differences and missingness. Values reconstructed from raw prices where the\nreference is missing are retained and labeled `reference_missing`; these are calculated observations, not\nstatistical imputations.\n\n### Primary cleaned CSV export\n\n- `MonthlyReturns.csv` in the project root is the cleaned 58-column panel used by the backtest.\n- `data/MonthlyReturns.csv` remains the untouched original reference input.\n\nThe export retains the reference column order, row order, date labels, and unnamed first date column.\nAll reference-observed values are reconstructed from raw prices and checked within 1e-6; 32 reference-missing\nvalues can be calculated from available raw month-end prices and are retained. No interpolation, zero filling,\nforward filling, winsorization, or automatic outlier deletion is applied. Pre-history missing values remain blank.\n", r'''
 # Purpose: Apply explicit selection rules and record monthly return provenance and reconciliation.
 rules = pd.DataFrame([
     ['SP','SP / ES / SC','SP','all','retain SP; exclude mini/alternative series'],
     ['ND','ND / EN','ND','all','retain ND'],
     ['RL','RL / ER','RL then ER',PARAMS['rl_er_switch'],'select ER monthly returns from switch month'],
-    ['ZD','ZD / YM','ZD','all','exclude YM only from unique-economic analysis']],
+    ['ZD','ZD / YM','ZD and YM','all','retain both (course 58-column set)']],
     columns=['canonical','candidates','selected','switch_month','rule'])
 save_csv(rules, 'cleaned', 'merge_rules.csv', False)
 recreated = raw_monthly_returns.reindex(columns=reference.columns).copy()
@@ -184,8 +184,7 @@ switch = pd.Period(PARAMS['rl_er_switch'], freq='M')
 recreated.loc[calendar >= switch, 'RL'] = raw_monthly_returns.loc[calendar >= switch, 'ER']
 provenance.loc[calendar >= switch, 'RL'] = 'ER'
 provenance = provenance.where(recreated.notna())
-unique_returns = recreated.drop(columns=['YM']).copy()
-save_csv(recreated, 'returns', 'monthly_returns_recreated_58.csv')
+analysis_returns = recreated.copy()
 
 # Export the primary 58-column deliverable using the reference CSV layout.
 # Keep the original input in data/MonthlyReturns.csv unchanged.
@@ -195,14 +194,10 @@ primary_export = recreated.reindex(index=export_months, columns=reference_layout
 primary_export.index = reference_layout.index.copy()
 primary_export.index.name = reference_layout.index.name
 primary_path = ROOT / 'MonthlyReturns.csv'
-cleaned_copy_path = DATA / 'MonthlyReturns_cleaned.csv'
 primary_export.to_csv(primary_path, encoding='utf-8-sig')
-cleaned_copy_path.write_bytes(primary_path.read_bytes())
 assert primary_export.shape == reference_layout.shape
 assert primary_export.columns.tolist() == reference_layout.columns.tolist()
-assert primary_path.read_bytes() == cleaned_copy_path.read_bytes()
 
-save_csv(unique_returns, 'returns', 'monthly_returns_unique_57.csv')
 save_csv(provenance, 'returns', 'monthly_return_source.csv')
 all_months = reference.index.union(recreated.index).sort_values()
 audit_rows = []
@@ -224,8 +219,8 @@ save_csv(reconciliation, 'returns', 'reconciliation_all.csv', False)
 save_csv(differences, 'returns', 'reconciliation_differences.csv', False)
 save_csv(reconciliation.groupby(['ID','status']).size().unstack(fill_value=0), 'returns', 'reconciliation_summary.csv')
 monthly_flags = []
-for symbol in unique_returns:
-    for month, value in unique_returns[symbol].items():
+for symbol in analysis_returns:
+    for month, value in analysis_returns[symbol].items():
         if pd.notna(value) and abs(value) > PARAMS['monthly_abs_threshold']:
             monthly_flags.append({'ID':symbol,'Month':month,'monthly_return':value})
 save_csv(pd.DataFrame(monthly_flags, columns=['ID','Month','monthly_return']), 'quality', 'monthly_return_outliers.csv', False)
@@ -235,7 +230,7 @@ display(differences.head(12))
 
 code('## 6. Descriptive Statistics and Asset-Class Portfolios\nPurpose: calculate monthly means, sample standard deviations, observation counts, sample coverage,\nextreme returns, and conventional annualized summaries for each economic instrument.\nAnnualized arithmetic mean = monthly mean x 12; annualized volatility = monthly standard deviation x sqrt(12).\nThese are conventional scalings, not evidence that returns are serially uncorrelated.\n\nWithin each asset class, assign equal weights to instruments with observed returns in that month and rebalance monthly.\nSave actual weights and member counts. Missing instruments receive no weight for that month;\nif all instruments in a class are missing, the class return is missing rather than zero.\nNo currency conversion is performed, so these are statistical portfolios of locally quoted returns,\nnot unified USD investment portfolios.\n\nIndividual statistics use available observations. Also report statistics for months in which all instruments\nhave observed returns, to distinguish sample-period effects from differences between instruments.', r'''
 # Purpose: Compute instrument, asset-class, and common-sample statistics.
-asset_class = mapping.set_index('ID').AssetClass.reindex(unique_returns.columns)
+asset_class = mapping.set_index('ID').AssetClass.reindex(analysis_returns.columns)
 assert asset_class.notna().all(), 'Some instruments have no asset-class classification.'
 def summarize(frame):
     rows = []
@@ -248,14 +243,14 @@ def summarize(frame):
             'annualized_arithmetic_mean':12*s.mean(), 'annualized_volatility':np.sqrt(12)*s.std(ddof=1),
             'min_monthly_return':s.min(), 'max_monthly_return':s.max()})
     return pd.DataFrame(rows).set_index('ID')
-instrument_stats = summarize(unique_returns).join(asset_class.rename('AssetClass'))
+instrument_stats = summarize(analysis_returns).join(asset_class.rename('AssetClass'))
 save_csv(instrument_stats, 'statistics', 'instrument_statistics.csv')
 class_returns = pd.DataFrame(index=calendar)
 class_counts = pd.DataFrame(index=calendar)
 weight_frames = []
 for category in sorted(asset_class.unique()):
     members = asset_class.index[asset_class == category]
-    block = unique_returns[members]
+    block = analysis_returns[members]
     class_counts[category] = block.notna().sum(axis=1)
     weights = block.notna().astype(float).div(class_counts[category].replace(0,np.nan),axis=0)
     class_returns[category] = block.mean(axis=1, skipna=True)
@@ -264,7 +259,7 @@ for category in sorted(asset_class.unique()):
     long['AssetClass'] = category
     weight_frames.append(long)
 class_stats = summarize(class_returns)
-common = unique_returns.dropna(how='any')
+common = analysis_returns.dropna(how='any')
 common_stats = summarize(common).join(asset_class.rename('AssetClass'))
 common_class_returns = pd.DataFrame({c:common.loc[:,asset_class == c].mean(axis=1) for c in sorted(asset_class.unique())})
 save_csv(class_returns, 'returns', 'asset_class_equal_weight_returns.csv')
@@ -287,7 +282,7 @@ def cumulative(frame):
         if first is not None:
             result.loc[first:, symbol] = (1+frame.loc[first:,symbol]).cumprod(skipna=False)-1
     return result
-cum_instruments = cumulative(unique_returns)
+cum_instruments = cumulative(analysis_returns)
 cum_classes = cumulative(class_returns)
 save_csv(cum_instruments, 'returns', 'cumulative_instrument_returns.csv')
 save_csv(cum_classes, 'returns', 'cumulative_asset_class_returns.csv')
@@ -303,11 +298,11 @@ def line_chart(frame, title, ylabel, filename, percent=True, preview=False):
 for category in sorted(asset_class.unique()):
     line_chart(cum_instruments.loc[:,asset_class == category], f'{category}: cumulative price returns (own histories)',
                'Cumulative return',f'cumulative_{category}')
-for symbol in unique_returns:
+for symbol in analysis_returns:
     line_chart(cum_instruments[[symbol]],f'{symbol}: cumulative price return','Cumulative return',f'cumulative_instrument_{symbol}')
 line_chart(cum_classes,'Equal-weight asset classes: changing available members','Cumulative return',
            'cumulative_asset_classes', preview=True)
-line_chart(class_counts,'Number of available unique instruments','Instruments','asset_class_member_counts',False)
+line_chart(class_counts,'Number of available instruments','Instruments','asset_class_member_counts',False)
 if len(common):
     group_id = pd.Series(common.index.asi8, index=common.index).diff().ne(1).cumsum()
     longest_id = group_id.value_counts().idxmax()
@@ -337,7 +332,7 @@ save_figure(fig,'instrument_mean_std')
 code('## 8. Monthly Return Autocorrelation (Lags 1-24)\nPurpose: calculate corr(r[t], r[t-k]) for instruments and asset classes, retaining the full monthly calendar before shifting.\nExport all lags, selected lags 1/3/6/12, valid pair counts, and individual instrument/asset-class ACF charts.\nOnly pairs with both returns observed contribute to each correlation; missing months are not compressed out of the timeline.\nThe plotted +/-1.96/sqrt(N) bands are rough white-noise reference bounds, not multiple-testing-adjusted significance tests.\nHere, horizon refers to the lag of monthly returns, not overlapping multi-month holding-period returns.', r'''
 # Purpose: Calculate autocorrelation using actual monthly lags and save the results.
 acf_rows = []
-for level, frame in [('instrument',unique_returns),('asset_class',class_returns)]:
+for level, frame in [('instrument',analysis_returns),('asset_class',class_returns)]:
     for symbol in frame:
         s=frame[symbol].reindex(calendar)
         for lag in range(1,PARAMS['acf_max_lag']+1):
@@ -382,16 +377,16 @@ print('Supplementary data:',lecture.Month.min(), 'to',lecture.Month.max(), 'coun
 
 code('## 10. Validation, Results Report, and Output Inventory\nPurpose: verify return-source selection, reconciliation of jointly observed values, return coverage,\nequal-weight portfolio weights, autocorrelation pair counts, and unchanged source files.\nWrite the English results report, environment information, and a complete output inventory.\nRetain missingness differences and data-quality flags explicitly.\nThese checks verify implementation consistency; they do not establish that every raw observation is correct.', r'''
 # Purpose: Validate key calculation relationships and compile the output inventory.
-assert len(raw)==62 and recreated.shape[1]==58 and unique_returns.shape[1]==57
+assert len(raw)==62 and recreated.shape[1]==58 and analysis_returns.shape[1]==58
 assert recreated.index.is_unique and recreated.index.is_monotonic_increasing
-assert not np.isinf(unique_returns.to_numpy()).any()
+assert not np.isinf(analysis_returns.to_numpy()).any()
 assert np.allclose(recreated.loc[calendar>=switch,'RL'],raw_monthly_returns.loc[calendar>=switch,'ER'],equal_nan=True)
 assert not (reconciliation.status=='value_mismatch').any(), 'Jointly observed returns differ; review the reconciliation differences.'
 weights_all=pd.concat(weight_frames,ignore_index=True)
 weight_sums=weights_all.groupby(['Month','AssetClass']).weight.sum()
 assert np.allclose(weight_sums,1.0)
 for k in PARAMS['acf_lags']:
-    s=unique_returns.iloc[:,0]
+    s=analysis_returns.iloc[:,0]
     expected=int((s.notna() & s.shift(k).notna()).sum())
     actual=acf[(acf.level=='instrument') & (acf.ID==s.name) & (acf.lag_months==k)].n_pairs.iloc[0]
     assert expected==actual
@@ -404,7 +399,7 @@ counts=reconciliation.status.value_counts().to_dict()
 report=f"""# Futures Data Analysis Results
 
 ## Data and Validation
-- Raw instruments: {len(raw)}; reference reconstruction: {recreated.shape[1]}; unique economic instruments: {unique_returns.shape[1]}.
+- Raw instruments: {len(raw)}; reference reconstruction: {recreated.shape[1]}.
 - Monthly calendar: {calendar.min()} to {calendar.max()}.
 - Quality events (including calendar-gap flags): {len(quality_events)}; flagged daily returns: {len(daily_flags)}; flagged monthly returns: {len(monthly_flags)}.
 - Reconciliation status: {counts}. Numeric tolerance: {PARAMS['reconciliation_tolerance']}.
@@ -413,8 +408,8 @@ report=f"""# Futures Data Analysis Results
 ## Methodology
 - Returns are adjacent month-end Close ratios minus one. Missing prices are not forward-filled; dates are aligned by calendar month.
 - Starting in {switch}, RL uses ER's own monthly returns. Price levels are not spliced directly.
-- The primary exports MonthlyReturns.csv and data/MonthlyReturns_cleaned.csv retain all 58 reference columns, including both ZD and YM. The two files are byte-identical.
-- The optional 57-column analysis excludes YM and retains ZD for Dow Jones. This is an additional modeling choice, not a requirement of the screenshot. SP and ND represent their respective ordinary/mini candidate groups.
+- The primary export MonthlyReturns.csv retains all 58 reference columns, including both ZD and YM.
+- Instrument merging follows Lecture 4: ES/SC -> SP, EN -> ND, ER -> RL from 2008-12. All statistics use the 58 columns.
 - The primary exports preserve the reference date labels and column order, retaining 32 reconstructable reference-missing values without statistical imputation. The original data/MonthlyReturns.csv remains unchanged.
 - Asset classes equally weight instruments with observed returns each month and rebalance monthly. Actual weights are saved in returns/asset_class_weights.csv.
 - Quoted currencies are not converted to USD. Continuous-contract adjustment and roll methods require clarification from the course data provider.
@@ -431,7 +426,7 @@ report=f"""# Futures Data Analysis Results
 ## Output Guide
 - quality/: input inventory, coverage checks, and anomaly records.
 - cleaned/: standardized daily observations, asset mapping, selection rules, and supplementary factor data.
-- returns/: month-end prices, 62/58/57-instrument returns, class returns, weights, cumulative returns, and full reconciliation.
+- returns/: month-end prices, 62/58-instrument returns, class returns, weights, cumulative returns, and full reconciliation.
 - statistics/: instrument and class summaries, common-sample statistics, and ACF results.
 - figures/: all PNG and SVG charts.
 """
