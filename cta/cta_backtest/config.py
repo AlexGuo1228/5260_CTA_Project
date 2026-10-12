@@ -67,6 +67,11 @@ class BacktestConfig:
     # historical to-date vol. Stops a vol collapse (e.g. Eurodollar at zero
     # rates, EWMA vol 0.07%) from turning into a 14x notional position.
     vol_floor_vs_history: float = 0.5
+    # Monthly-only bridge: match daily calendar decay at 21 trading days/month.
+    # These parameters are fixed, not re-optimised on the test sample.
+    monthly_vol_halflife: float = 60.0 / 21.0
+    monthly_corr_halflife: float = 120.0 / 21.0
+    monthly_ewma_min_months: int = 6
     # Minimum daily returns before an EWMA estimate is produced.
     vol_ewma_min_days: int = 126
     # Half-life candidates and the last month of the selection (training) sample.

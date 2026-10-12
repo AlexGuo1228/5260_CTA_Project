@@ -1,5 +1,5 @@
 """Course baseline TSMOM vs static benchmark (Lecture 6 replication), and the
-upgrade ladder: course 11% vol target -> daily EWMA risk model -> risk caps
+upgrade ladder: course 11% vol target -> monthly EWMA -> daily EWMA -> risk caps
 (= CTA_v1), then a trend-continuity filter (= CTA_v2, midterm strategy); crisis-alpha
 and SG Trend comparison (2000-2014, the factor file's span).
 
@@ -19,7 +19,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from cta_backtest import (BacktestConfig, StaticBenchmark, TSMOMBaseline, VolTargetTSMOM,  # noqa: E402
-                          coverage_table, ewma_risk, historical_risk, load_market_data, metrics,
+                          coverage_table, ewma_risk, historical_risk, monthly_ewma_risk, load_market_data, metrics,
                           run_backtest)
 from cta_backtest.daily import load_daily_returns  # noqa: E402
 from cta_backtest.trend_strength import continuity_monthly  # noqa: E402
@@ -45,9 +45,10 @@ COURSE["VT11_historical"] = (0.119, 0.110, 1.08, 0.03)
 # Categorical slots in fixed order; colour follows the series across charts.
 COLORS = {"TSMOM_12": "#2a78d6", "STATIC": "#eb6834", "TSMOM_1": "#1baf7a",
           "TSMOM_3": "#eda100", "TSMOM_6": "#e87ba4",
-          "VT11_historical": "#1baf7a", "VT11_ewma": "#eda100", "CTA_v1": "#e87ba4",
+          "VT11_historical": "#1baf7a", "VT11_monthly_ewma": "#7851a9",
+          "VT11_ewma": "#eda100", "CTA_v1": "#e87ba4",
           "CTA_v2": "#008300"}
-LADDER = ["TSMOM_12", "VT11_historical", "VT11_ewma", "CTA_v1", "CTA_v2"]
+LADDER = ["TSMOM_12", "VT11_historical", "VT11_monthly_ewma", "VT11_ewma", "CTA_v1", "CTA_v2"]
 # Chart legends: what each run is, not just its code name.
 LABELS = {
     "TSMOM_12": "Course baseline: sign(12m) x 40%/vol, 1/N",
@@ -56,7 +57,8 @@ LABELS = {
     "TSMOM_6": "Course baseline, 6-month lookback",
     "STATIC": "Static benchmark: long all vol-adjusted assets",
     "VT11_historical": "Course L6: + 11% vol target (historical covariance)",
-    "VT11_ewma": "+ daily EWMA risk model",
+    "VT11_monthly_ewma": "+ monthly EWMA risk model",
+    "VT11_ewma": "+ daily data for EWMA risk model",
     "CTA_v1": "CTA_v1: + risk caps (risk-control upgrade only)",
     "CTA_v2": "CTA_v2: + trend-continuity filter (final)",
     "SG_Trend": "SG Trend Index (live CTA benchmark, net of fees)",
@@ -75,7 +77,7 @@ def style(ax):
 
 
 def plot_lines(series: dict, title: str, ylabel: str, path: str):
-    fig, ax = plt.subplots(figsize=(10, 4.8), dpi=130)
+    fig, ax = plt.subplots(figsize=(11, 6), dpi=130)
     for label, s in series.items():
         ax.plot(s.index, s.values, color=COLORS[label], linewidth=1.6, label=LABELS.get(label, label))
         if len(series) <= 2:
@@ -198,6 +200,8 @@ def main():
     daily = load_daily_returns(cfg.daily_dir, md.returns.columns, cfg.daily_splices, cfg.daily_max_gap_days)
     hist, ewma = historical_risk(md.returns, cfg), ewma_risk(daily, md.returns, cfg)
     results["VT11_historical"] = run(VolTargetTSMOM(cfg, hist, "baseline"), "VT11_historical")
+    results["VT11_monthly_ewma"] = run(VolTargetTSMOM(cfg, monthly_ewma_risk(md.returns, cfg), "baseline"),
+                                       "VT11_monthly_ewma")
     results["VT11_ewma"] = run(VolTargetTSMOM(cfg, ewma, "baseline"), "VT11_ewma")
     results["CTA_v1"] = run(VolTargetTSMOM(cfg, ewma, "capped", md.asset_class), "CTA_v1")
     cont = continuity_monthly(daily, md.returns, cfg.momentum_lookback, cfg.continuity_window_days)
@@ -225,6 +229,7 @@ def main():
 
     pd.DataFrame(rets)[order + LADDER[1:]].to_csv(os.path.join(OUT, "monthly_returns.csv"))
     results["CTA_v2"].weights.to_csv(os.path.join(OUT, "weights_cta_v2.csv"))
+    results["VT11_monthly_ewma"].weights.to_csv(os.path.join(OUT, "weights_monthly_ewma.csv"))
     base.weights.to_csv(os.path.join(OUT, "weights_tsmom_12.csv"))
     static.weights.to_csv(os.path.join(OUT, "weights_static.csv"))
 

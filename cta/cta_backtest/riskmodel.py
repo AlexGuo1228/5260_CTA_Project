@@ -60,3 +60,43 @@ def ewma_risk(daily: pd.DataFrame, monthly: pd.DataFrame, cfg: BacktestConfig) -
     C = pd.Series(list(C), index=p_c).reindex(periods)
     cov = np.array([np.outer(v, v) * c for v, c in zip(vol, C)])
     return RiskModel("ewma", ids, periods, vol, cov)
+
+
+def monthly_ewma_risk(monthly: pd.DataFrame, cfg: BacktestConfig) -> RiskModel:
+    """Monthly-only zero-mean EWMA, with separate vol/correlation half-lives.
+
+    Missing returns are masked, never observed zeros. Pairwise second moments
+    use observation weights; correlations require effective joint history and
+    are projected PSD. Keep the daily version's historical volatility floor.
+    Every stored forecast uses observations through its own month only.
+    """
+    ids = list(monthly.columns)
+    periods = monthly.index.to_period("M")
+    lv = 0.5 ** (1.0 / cfg.monthly_vol_halflife)
+    lc = 0.5 ** (1.0 / cfg.monthly_corr_halflife)
+    n = len(ids)
+    sv, wv, count = np.zeros(n), np.zeros(n), np.zeros(n)
+    sc, wc = np.zeros((n, n)), np.zeros((n, n))
+    minimum = 1.0 - lc ** cfg.monthly_ewma_min_months
+    hist = expanding_volatility_panel(monthly, cfg.vol_min_months).to_numpy()
+    vols, covs = [], []
+    for t, row in enumerate(monthly.to_numpy(dtype=float)):
+        mask = np.isfinite(row).astype(float)
+        x = np.where(mask, row, 0.0)
+        count += mask
+        sv, wv = lv * sv + (1 - lv) * x ** 2, lv * wv + (1 - lv) * mask
+        sc = lc * sc + (1 - lc) * np.outer(x, x)
+        wc = lc * wc + (1 - lc) * np.outer(mask, mask)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            v = np.sqrt(12.0 * sv / wv)
+            second = sc / wc
+            sd = np.sqrt(np.diag(second))
+            corr = second / np.outer(sd, sd)
+        v[count < cfg.monthly_ewma_min_months] = np.nan
+        v = np.where(np.isfinite(hist[t]), np.fmax(v, cfg.vol_floor_vs_history * hist[t]), v)
+        corr = np.where((wc >= minimum - 1e-12) & np.isfinite(corr), corr, 0.0)
+        np.fill_diagonal(corr, 1.0)
+        corr = _nearest_correlation(corr)
+        vols.append(v)
+        covs.append(np.outer(v, v) * corr)
+    return RiskModel("monthly_ewma", ids, periods, np.array(vols), np.array(covs))

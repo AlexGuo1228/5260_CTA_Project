@@ -26,7 +26,7 @@ cta/                                # stage 2: backtest
   cta_backtest/daily.py             # daily returns for the 58 columns (same merge rules)
   cta_backtest/strategies.py        # TSMOMBaseline, StaticBenchmark, VolTargetTSMOM (CTA_v1 / CTA_v2)
   cta_backtest/trend_strength.py    # trend continuity (CTA_v2 filter), p_trend (research)
-  cta_backtest/riskmodel.py         # point-in-time risk models: historical to-date, daily EWMA
+  cta_backtest/riskmodel.py         # point-in-time risk models: historical, monthly EWMA, daily EWMA
   cta_backtest/engine.py            # backtest loop, one-month lag enforced
   cta_backtest/metrics.py           # performance statistics
   run_backtest.py                   # baseline replication, upgrade ladder, crisis alpha -> cta/output/
@@ -76,7 +76,24 @@ Run (from `cta/`, Python with pandas, numpy, matplotlib, pytest):
     python run_backtest.py
     python -m pytest -q
 
-## Risk model upgrade (daily data)
+## Risk model upgrade: monthly to daily data
+
+The upgrade ladder now includes `VT11_monthly_ewma` between `VT11_historical`
+and `VT11_ewma`. It consumes only the monthly return panel: zero-mean EWMA
+second moments for volatility and correlation, covariance = D C D, annualised
+with 12 months/year. Missing returns are masked rather than treated as observed
+zeros; pairwise correlations require effective joint history and are projected PSD.
+
+For a fixed-decay frequency comparison, its volatility half-life is 60/21 = 2.857
+months and its correlation half-life is 120/21 = 5.714 months, matching the existing
+daily model at 21 trading days/month. The minimum EWMA history is 6 months
+(126/21). These new monthly parameters were fixed by conversion, not selected
+by maximising performance. Both versions retain the same 50%-of-historical-vol
+floor, 36-month eligibility, 12-month direction signal, monthly rebalancing and
+11% portfolio volatility target. The daily step also retains its existing 3-day
+overlapping-return correlation estimator; this is a comparison of the two risk
+model implementations, not a claim that frequency is their only difference.
+Monthly EWMA weights are exported to `cta/output/weights_monthly_ewma.csv`.
 
 Forecasts are made at month-end t from daily data through t and scored on month t+1.
 Parameters are chosen on months up to 1999 (QLIKE against the squared monthly return);
@@ -104,19 +121,29 @@ Trend following on 58 futures, rebalanced monthly; every input point-in-time.
    (10% per instrument, 40% per asset class: share = cap x tanh(lambda x raw / cap)).
 5. Vol target: 11% ex-ante portfolio volatility every month (course L6 level).
 
-Same instruments and months for every version. Everything was chosen on data to 1999;
-2000-2014 was never used to choose.
+Same instruments and months for every version. The original strategy parameters
+were selected on data to 1999; the added monthly EWMA parameters are fixed calendar
+conversions of the daily settings. The 2000-2014 evaluation is not used to tune them.
 
 | Version | SR | SR to 1999 / from 2000 | SR from 2000, net 5bp | Max DD | Skew |
 |---|---|---|---|---|---|
 | TSMOM_12 (course baseline) | 0.99 | 1.13 / 0.84 | 0.80 | -26% | -0.07 |
 | VT11_historical (course L6, SR 1.08) | 1.07 | 1.17 / 0.96 | 0.90 | -19% | -0.16 |
+| VT11_monthly_ewma (+ monthly EWMA risk model) | 1.30 | 1.39 / 1.15 | 1.07 | -13% | -0.06 |
 | VT11_ewma (+ daily EWMA risk model) | 1.28 | 1.33 / 1.18 | 1.09 | -15% | -0.07 |
 | CTA_v1 (+ soft risk caps) | 1.29 | 1.36 / 1.16 | 1.06 | -14% | -0.13 |
 | **CTA_v2** (+ trend-continuity filter) | **1.34** | **1.44 / 1.17** | **1.08** | **-12%** | **-0.06** |
 
-Most of the gain is the risk model (out of sample 0.84 -> 1.18). The continuity filter adds
-a small, consistent improvement in both periods with no extra turnover.
+The risk-model ladder's out-of-sample SR is 0.96 (historical) -> 1.15 (monthly
+EWMA) -> 1.18 (daily EWMA). Most of the gain is already achieved by monthly
+exponential weighting. Daily data adds a small out-of-sample SR improvement and
+brings realised out-of-sample volatility closer to the 11% target (monthly 9.79%,
+daily 11.02%). This is not a uniform improvement: full-sample SR falls from 1.30
+to 1.28, maximum drawdown worsens from -12.86% to -14.58%, and annual turnover
+rises from 13.47 to 15.60. Full-sample arithmetic annualised returns rise from
+12.47% to 14.76%, alongside realised volatility rising from 9.60% to 11.56%.
+The continuity filter improves CTA_v1 in both periods with slightly lower turnover,
+but CTA_v2's test SR remains slightly below the uncapped daily EWMA version.
 
 Signal research (`research_signals.py`, `evaluate_signal_strength.py`): continuous t-stat
 signals, multi-horizon signs (1/3/6/12m, raw and risk-adjusted) and the hybrid_v2 p_trend

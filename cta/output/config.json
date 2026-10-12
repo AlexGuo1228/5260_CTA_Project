@@ -22,6 +22,9 @@
   "daily_max_gap_days": 7,
   "vol_halflife_days": 60.0,
   "vol_floor_vs_history": 0.5,
+  "monthly_vol_halflife": 2.857142857142857,
+  "monthly_corr_halflife": 5.714285714285714,
+  "monthly_ewma_min_months": 6,
   "vol_ewma_min_days": 126,
   "vol_halflife_grid": [
     10.0,

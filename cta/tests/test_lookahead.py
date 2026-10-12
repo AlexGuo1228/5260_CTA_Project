@@ -22,6 +22,52 @@ from cta_backtest.signals import tsmom_sign  # noqa: E402
 STRATEGIES = [TSMOMBaseline, StaticBenchmark]
 
 
+def test_monthly_ewma_formula_missing_and_covariance():
+    from cta_backtest import monthly_ewma_risk
+    cfg = BacktestConfig(monthly_ewma_min_months=2, vol_floor_vs_history=0.0)
+    dates = pd.date_range("2000-01-31", periods=8, freq="ME")
+    a = np.array([0.01, -0.02, 0.03, np.nan, 0.02, -0.01, 0.04, -0.02])
+    r = pd.DataFrame({"A": a, "B": 2 * a, "EMPTY": np.nan}, index=dates)
+    risk = monthly_ewma_risk(r, cfg)
+    lam = 0.5 ** (1 / cfg.monthly_vol_halflife)
+    for t in range(1, len(r)):
+        weights = lam ** np.arange(t, -1, -1)
+        valid = np.isfinite(a[:t + 1])
+        expected = np.sqrt(12 * np.average(a[:t + 1][valid] ** 2, weights=weights[valid]))
+        assert risk.vol[t, 0] == pytest.approx(expected)
+        assert risk.vol[t, 1] == pytest.approx(2 * expected)
+        assert np.isnan(risk.vol[t, 2])
+        cov = risk.cov[t, :2, :2]
+        np.testing.assert_allclose(np.diag(cov), risk.vol[t, :2] ** 2)
+        assert np.linalg.eigvalsh(cov).min() >= -1e-12
+    assert risk.cov[-1, 0, 1] / np.prod(risk.vol[-1, :2]) == pytest.approx(1, abs=1e-7)
+
+
+def test_monthly_ewma_weights_ignore_future_and_hit_target(full):
+    from cta_backtest import monthly_ewma_risk, VolTargetTSMOM
+    cfg, md = full
+    rets = md.returns.loc["1975":"2000"]
+    cutoff = pd.Timestamp("1992-12-31")
+    fake = rets.copy()
+    after = fake.index > cutoff
+    rng = np.random.default_rng(42)
+    fake.loc[after] = np.where(fake.loc[after].notna(), rng.normal(0, 0.3, fake.loc[after].shape), np.nan)
+    risk, other = monthly_ewma_risk(rets, cfg), monthly_ewma_risk(fake, cfg)
+    past = risk.periods <= cutoff.to_period("M")
+    np.testing.assert_array_equal(risk.vol[past], other.vol[past])
+    np.testing.assert_array_equal(risk.cov[past], other.cov[past])
+    a = run_backtest(rets, VolTargetTSMOM(cfg, risk), "a")
+    b = run_backtest(fake, VolTargetTSMOM(cfg, other), "b")
+    pd.testing.assert_frame_equal(a.weights.loc[:cutoff], b.weights.loc[:cutoff], check_exact=True)
+    baseline = run_backtest(rets, TSMOMBaseline(cfg), "baseline")
+    pd.testing.assert_frame_equal(a.weights != 0, baseline.weights != 0)
+    for date, row in a.weights.iterrows():
+        w = row.to_numpy()
+        _, cov = risk.at(date.to_period("M"))
+        on = w != 0
+        assert np.sqrt(w[on] @ cov[np.ix_(on, on)] @ w[on]) == pytest.approx(cfg.portfolio_vol_target)
+
+
 def _cfg(**kw) -> BacktestConfig:
     return BacktestConfig(returns_path=os.path.join(ROOT, "..", "MonthlyReturns.csv"),
                           asset_map_path=os.path.join(ROOT, "..", "data", "AssetMapCsv.csv"), **kw)
