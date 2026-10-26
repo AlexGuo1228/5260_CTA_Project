@@ -24,3 +24,7 @@ Thumbs.db
 
 # Local Chinese team handoff (not for GitHub)
 /docs/WEEKLY_UPDATE.md
+/docs/Lecture 8 update.md
+
+# Local PDF rendering checks
+/tmp/pdfs/

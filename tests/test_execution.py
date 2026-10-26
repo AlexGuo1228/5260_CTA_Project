@@ -97,3 +97,45 @@ def test_gap_in_target_dates_fails():
     m = panel([[0, 0]] * 5)
     with pytest.raises(ValueError, match="consecutive"):
         replay_execution(m, m.iloc[[0, 2]], ExecutionConfig())
+
+
+def test_margin_is_not_a_cost_and_cash_covers_small_requirement():
+    m = panel([[0, 0], [0, 0]])
+    res = replay_execution(m, panel([[5., 0]]), ExecutionConfig(
+        trade_bps=0, roll_roundtrip_bps=0, margin_rate=.1, financing_rate=.05))
+    row = res.ledger.iloc[0]
+    assert row.margin_required == pytest.approx(.5)
+    assert row.cash_headroom == pytest.approx(.3)
+    assert row.borrowing == 0
+    assert row.net_return == 0
+
+
+def test_financing_charged_only_on_shortfall_and_enters_next_drift():
+    m = panel([[0, 0], [0, 0], [0, 0]])
+    res = replay_execution(m, panel([[5., 0], [5., 0]]), ExecutionConfig(
+        trade_bps=0, roll_roundtrip_bps=0, margin_rate=.2, financing_rate=.06))
+    row = res.ledger.iloc[0]
+    assert row.borrowing == pytest.approx(.2)
+    assert row.financing_cost == pytest.approx(.001)
+    assert row.net_return == pytest.approx(-.001)
+    assert res.ledger.iloc[1].turnover == pytest.approx(5/.999-5)
+
+
+def test_no_borrowing_policy_rescales_positions_before_cost_and_pnl():
+    m = panel([[0, 0], [.1, 0]])
+    res = replay_execution(m, panel([[5., 0]]), ExecutionConfig(
+        trade_bps=2, roll_roundtrip_bps=0, margin_rate=.2, financing_rate=.06,
+        funding_mode="scale"))
+    row = res.ledger.iloc[0]
+    assert row.funding_scale == pytest.approx(.8)
+    assert row.margin_required == pytest.approx(.8)
+    assert row.borrowing == pytest.approx(0, abs=1e-12)
+    assert row.gross_return == pytest.approx(.4)
+    assert row.net_return == pytest.approx(.4 - 4*.0002)
+
+
+@pytest.mark.parametrize("kwargs", [{"margin_rate": -1}, {"cash_buffer": 1},
+                                    {"financing_rate": -.01}, {"funding_mode": "bad"}])
+def test_invalid_funding_parameters_fail(kwargs):
+    with pytest.raises(ValueError):
+        ExecutionConfig(**kwargs)

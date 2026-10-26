@@ -29,10 +29,20 @@ class ExecutionConfig:
     fraction: float = 0.50
     # Reduced-turnover policies fall back to the target if stale risk is excessive.
     max_risk_ratio: float = 1.25
+    # Uniform initial-margin fraction of gross notional; zero preserves legacy runs.
+    margin_rate: float = 0.0
+    # NAV reserved as an operational liquidity buffer, unavailable for initial margin.
+    cash_buffer: float = 0.20
+    # Annual incremental borrowing rate NET of collateral/reference cash income.
+    # Returns remain excess returns; do not add the risk-free rate a second time.
+    financing_rate: float = 0.0
+    # Borrow assumes available credit. Scale instead reduces exposure to cash capacity.
+    funding_mode: str = "borrow"
 
     def __post_init__(self):
         values = (self.trade_bps, self.roll_roundtrip_bps, self.rolls_per_year,
-                  self.buffer, self.fraction, self.max_risk_ratio)
+                  self.buffer, self.fraction, self.max_risk_ratio,
+                  self.margin_rate, self.cash_buffer, self.financing_rate)
         if not all(np.isfinite(values)):
             raise ValueError("Execution parameters must be finite")
         if min(self.trade_bps, self.roll_roundtrip_bps, self.rolls_per_year, self.buffer) < 0:
@@ -41,6 +51,10 @@ class ExecutionConfig:
             raise ValueError("Unknown execution policy")
         if not 0 < self.fraction <= 1 or self.max_risk_ratio < 1:
             raise ValueError("Invalid fraction or risk ratio")
+        if not 0 <= self.margin_rate <= 1 or not 0 <= self.cash_buffer < 1 or self.financing_rate < 0:
+            raise ValueError("Invalid margin, cash buffer or financing rate")
+        if self.funding_mode not in {"borrow", "scale"}:
+            raise ValueError("Unknown funding mode")
 
 
 @dataclass
@@ -110,6 +124,18 @@ are explicitly counted. No terminal liquidation is assumed.
                 held = target.copy()
                 forecast = target_forecast
                 forced = True
+        # Margin is collateral, not an expense. Reserve the buffer, then fund only
+        # the shortfall. Netting offsets, collateral haircuts and daily variation
+        # margin are not modeled; all inputs are known on the signal date.
+        requested_margin = float(np.abs(held).sum()) * cfg.margin_rate
+        funding_scale = 1.0
+        if cfg.funding_mode == "scale" and requested_margin > 1 - cfg.cash_buffer:
+            funding_scale = (1 - cfg.cash_buffer) / requested_margin
+            held = held * funding_scale
+            forecast *= funding_scale
+        margin_required = float(np.abs(held).sum()) * cfg.margin_rate
+        borrowing = max(margin_required - (1 - cfg.cash_buffer), 0.0)
+        financing_cost = borrowing * cfg.financing_rate / 12
         delta = held - current
         turnover = float(np.abs(delta).sum())
         gross_exposure = float(np.abs(held).sum())
@@ -118,13 +144,17 @@ are explicitly counted. No terminal liquidation is assumed.
         next_returns = monthly.iloc[loc + 1]
         r = next_returns.fillna(0).to_numpy()
         gross = float(held @ r)
-        net = gross - trade_cost - roll_cost
+        net = gross - trade_cost - roll_cost - financing_cost
         if 1 + net <= 0:
             raise ValueError("Portfolio NAV is nonpositive")
         positions.append(held.copy())
         trades.append(delta.copy())
         ledger.append(dict(date=monthly.index[loc + 1], gross_return=gross, net_return=net,
-                           trade_cost=trade_cost, roll_cost=roll_cost, turnover=turnover,
+                           trade_cost=trade_cost, roll_cost=roll_cost,
+                           financing_cost=financing_cost, margin_required=margin_required,
+                           borrowing=borrowing, cash_headroom=1-cfg.cash_buffer-margin_required,
+                           requested_margin=requested_margin, funding_scale=funding_scale,
+                           turnover=turnover,
                            gross_exposure=gross_exposure, forecast_vol=forecast,
                            target_forecast_vol=target_forecast, forced_rebalance=forced,
                            target_distance=float(np.abs(held - target).sum()),
@@ -153,6 +183,13 @@ Gross return uses the executed positions of this run, not another policy's book.
                 gross_ann_return=ledger.gross_return.mean() * 12,
                 ann_trade_cost=ledger.trade_cost.mean() * 12,
                 ann_roll_cost=ledger.roll_cost.mean() * 12,
+                ann_financing_cost=ledger.financing_cost.mean() * 12,
+                avg_margin=ledger.margin_required.mean(),
+                peak_margin=ledger.margin_required.max(),
+                avg_borrowing=ledger.borrowing.mean(),
+                peak_borrowing=ledger.borrowing.max(),
+                borrowing_months=int((ledger.borrowing > 1e-12).sum()),
+                scaled_months=int((ledger.funding_scale < 1-1e-12).sum()),
                 ann_turnover=ledger.turnover.mean() * 12,
                 avg_gross=ledger.gross_exposure.mean(),
                 avg_forecast_vol=ledger.forecast_vol.mean(),

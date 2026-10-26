@@ -65,12 +65,39 @@ All candidate holdout results are diagnostic; they were not used to select the p
 3. Validate robustness with walk-forward selection and genuinely new data if available.
    Existing risk/signal settings were inherited from the midterm. Historical selection
    and a small parameter grid do not establish out-of-sample statistical significance.
-4. Check final executed-position concentration, leverage and margin constraints; then
+4. Calibrate the new margin and financing scenarios and check concentration; then
    introduce transaction-cost-aware portfolio optimization. The current fallback only
    limits excess forecast risk relative to the target, whose constraints remain inherited.
 5. Monthly fills assume month-end information can fund next-month exposure. Model
    execution delay and daily risk monitoring before describing this as production-ready.
    Missing held returns retain the legacy zero-return treatment and are counted in CSVs.
+
+## Margin and financing extension
+The original tables above isolate trading and rolling expense. The additional
+scenarios below also model collateral capacity and incremental financing costs.
+All retain 2 bps trading and 2 bps round-trip rolling costs and full execution.
+
+Margin/NAV = margin rate x gross notional/NAV. With a 20% NAV cash reserve,
+borrowing/NAV = max(margin/NAV - 80%, 0). Monthly financing expense equals
+borrowing/NAV x annual incremental financing rate / 12. Margin is collateral,
+not an expense. Rates of 2%, 5% and 8% are hypothetical incremental spreads net
+of collateral/reference cash income, consistent with excess-return accounting.
+The borrow scenarios assume credit is available; no lender limit is modeled.
+The no-borrow scenario scales positions to fit the 80% NAV collateral budget,
+then recomputes trades, costs and P&L. It can therefore miss the volatility target.
+
+| Funding scenario | Avg margin / NAV | Borrowing months | Financing / year | Net Sharpe | Net ann. mean |
+| --- | --- | --- | --- | --- | --- |
+| margin10_rate2 | 58.5% | 27 | 0.03% | 1.090 | 12.10% |
+| margin20_rate5 | 117.0% | 155 | 2.00% | 0.915 | 10.13% |
+| margin30_rate8 | 175.5% | 171 | 7.72% | 0.400 | 4.41% |
+| margin20_no_borrow | 76.9% | 0 | 0.00% | 0.947 | 8.14% |
+
+These are monthly initial-margin proxies, not exchange margin schedules. They
+exclude intramonth variation margin, collateral haircuts, portfolio offsets,
+credit-line commitment fees and forced intraday liquidation. A zero modeled
+funding gap does not establish that the strategy is safe from margin calls.
+See `output/pdf/LECTURE8_RESULTS_SUMMARY.pdf` for the three-page visual summary.
 
 ## Reproduce and continue
 Run `python -m pytest -q tests`, then `python run_execution_study.py` from the project root.

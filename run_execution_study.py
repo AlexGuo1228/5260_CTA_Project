@@ -128,10 +128,31 @@ def main():
             for period, stats in split_stats(ledger.loc[common_start:common_end]).items():
                 selected_rows.append(dict(policy=label, trade_bps=bps, period=period, **stats))
     pd.DataFrame(selected_rows).to_csv(OUT / "selected_policy_cost_sensitivity.csv", index=False)
+    # Predeclared funding scenarios, not rates fitted to the observed returns.
+    # Borrowing rates are incremental spreads over collateral/reference income.
+    funding_scenarios = {
+        "margin10_rate2": replace(assumptions, margin_rate=.10, financing_rate=.02),
+        "margin20_rate5": replace(assumptions, margin_rate=.20, financing_rate=.05),
+        "margin30_rate8": replace(assumptions, margin_rate=.30, financing_rate=.08),
+        "margin20_no_borrow": replace(assumptions, margin_rate=.20, financing_rate=.05,
+                                      funding_mode="scale"),
+    }
+    funding_rows = []
+    print("Evaluating margin, cash capacity and financing scenarios...", flush=True)
+    for name, baseline in baselines.items():
+        for label, funding_cfg in funding_scenarios.items():
+            result = replay_execution(m, baseline.weights, funding_cfg)
+            ledger = result.ledger.loc[common_start:common_end]
+            ledger.to_csv(OUT / "runs" / f"{name}_{label}.csv")
+            for period, stats in split_stats(ledger).items():
+                funding_rows.append(dict(strategy=name, scenario=label, period=period, **stats))
+    funding_summary = pd.DataFrame(funding_rows)
+    funding_summary.to_csv(OUT / "funding_comparison.csv", index=False)
     source_paths = ([ROOT / "MonthlyReturns.csv", ROOT / "data/AssetMapCsv.csv", Path(__file__)]
                     + sorted((ROOT / "data/FuturesUnderlyingData").glob("*.csv"))
                     + sorted((ROOT / "cta_backtest").glob("*.py")))
     manifest = dict(config=cfg.to_dict(), execution=asdict(assumptions),
+                    funding_scenarios={k: asdict(v) for k, v in funding_scenarios.items()},
                     policies={k: asdict(v) for k, v in policies.items()},
                     selected_policy=selected, selected_config=asdict(frozen),
                     selection="Highest net training Sharpe through 1999; lower turnover breaks ties",
@@ -189,6 +210,16 @@ def write_report(summary, policies, selected, manifest):
         return f"between {earlier.index[-1]} and {upper} bps" if len(earlier) else f"at or below {upper} bps"
     advantage_bracket = crossing_bracket(cta.sharpe - baseline.sharpe)
     return_bracket = crossing_bracket(cta.ann_return)
+    funding = pd.read_csv(OUT / "funding_comparison.csv")
+    funding = funding[(funding.strategy == "CTA_v2") & (funding.period == "holdout")]
+    funding_display = pd.DataFrame({
+        "Funding scenario": funding.scenario,
+        "Avg margin / NAV": funding.avg_margin.map(lambda x: f"{x:.1%}"),
+        "Borrowing months": funding.borrowing_months.astype(int),
+        "Financing / year": funding.ann_financing_cost.map(lambda x: f"{x:.2%}"),
+        "Net Sharpe": funding.sharpe.map(lambda x: f"{x:.3f}"),
+        "Net ann. mean": funding.ann_return.map(lambda x: f"{x:.2%}"),
+    })
     report = f"""# Lecture 8 execution study: handoff report
 
 ## What was done
@@ -241,12 +272,34 @@ All candidate holdout results are diagnostic; they were not used to select the p
 3. Validate robustness with walk-forward selection and genuinely new data if available.
    Existing risk/signal settings were inherited from the midterm. Historical selection
    and a small parameter grid do not establish out-of-sample statistical significance.
-4. Check final executed-position concentration, leverage and margin constraints; then
+4. Calibrate the new margin and financing scenarios and check concentration; then
    introduce transaction-cost-aware portfolio optimization. The current fallback only
    limits excess forecast risk relative to the target, whose constraints remain inherited.
 5. Monthly fills assume month-end information can fund next-month exposure. Model
    execution delay and daily risk monitoring before describing this as production-ready.
    Missing held returns retain the legacy zero-return treatment and are counted in CSVs.
+
+## Margin and financing extension
+The original tables above isolate trading and rolling expense. The additional
+scenarios below also model collateral capacity and incremental financing costs.
+All retain 2 bps trading and 2 bps round-trip rolling costs and full execution.
+
+Margin/NAV = margin rate x gross notional/NAV. With a 20% NAV cash reserve,
+borrowing/NAV = max(margin/NAV - 80%, 0). Monthly financing expense equals
+borrowing/NAV x annual incremental financing rate / 12. Margin is collateral,
+not an expense. Rates of 2%, 5% and 8% are hypothetical incremental spreads net
+of collateral/reference cash income, consistent with excess-return accounting.
+The borrow scenarios assume credit is available; no lender limit is modeled.
+The no-borrow scenario scales positions to fit the 80% NAV collateral budget,
+then recomputes trades, costs and P&L. It can therefore miss the volatility target.
+
+{table(funding_display, list(funding_display.columns))}
+
+These are monthly initial-margin proxies, not exchange margin schedules. They
+exclude intramonth variation margin, collateral haircuts, portfolio offsets,
+credit-line commitment fees and forced intraday liquidation. A zero modeled
+funding gap does not establish that the strategy is safe from margin calls.
+See `output/pdf/LECTURE8_RESULTS_SUMMARY.pdf` for the three-page visual summary.
 
 ## Reproduce and continue
 Run `python -m pytest -q tests`, then `python run_execution_study.py` from the project root.

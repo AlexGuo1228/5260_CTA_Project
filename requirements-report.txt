@@ -1,0 +1,4 @@
+# Optional dependencies for the three-page results summary.
+-r requirements.txt
+reportlab>=4.0
+pypdf>=4.0

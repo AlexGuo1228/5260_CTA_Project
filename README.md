@@ -20,6 +20,20 @@ requirements. This reproduces six midterm baselines, verifies zero-cost executio
 against the original engine, and evaluates trading/rolling costs plus turnover
 buffers and partial rebalancing. Selection uses data through 1999 only.
 
+The study also compares uniform margin requirements (10%, 20%, 30%), a 20% NAV
+cash reserve, and hypothetical incremental funding rates (2%, 5%, 8%). Financing
+is charged only on cash shortfalls, net of collateral/reference cash income.
+A no-borrowing comparison scales exposure to cash capacity. These are monthly
+scenarios, not calibrated exchange margins or a daily margin-call simulation.
+
+For the annotated three-page PDF, install `requirements-report.txt` and run
+`python build_results_summary.py` after the study. Figures are saved in
+`output/execution_study/figures/`. The builder also supports `--charts-only` and
+`--pdf-only` for environments with separate plotting and PDF dependencies.
+
+- [Three-page results summary](output/pdf/LECTURE8_RESULTS_SUMMARY.pdf).
+- `output/execution_study/funding_comparison.csv`: margin and financing results.
+
 - [Short report](docs/EXECUTION_STUDY_REPORT.md): assumptions, measured results,
   limitations and next steps.
 - `cta_backtest/execution.py`: actual-position replay and cost accounting.

@@ -62,7 +62,65 @@
     "policy": "full",
     "buffer": 0.1,
     "fraction": 0.5,
-    "max_risk_ratio": 1.25
+    "max_risk_ratio": 1.25,
+    "margin_rate": 0.0,
+    "cash_buffer": 0.2,
+    "financing_rate": 0.0,
+    "funding_mode": "borrow"
+  },
+  "funding_scenarios": {
+    "margin10_rate2": {
+      "trade_bps": 2.0,
+      "roll_roundtrip_bps": 2.0,
+      "rolls_per_year": 4.0,
+      "policy": "full",
+      "buffer": 0.1,
+      "fraction": 0.5,
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.1,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.02,
+      "funding_mode": "borrow"
+    },
+    "margin20_rate5": {
+      "trade_bps": 2.0,
+      "roll_roundtrip_bps": 2.0,
+      "rolls_per_year": 4.0,
+      "policy": "full",
+      "buffer": 0.1,
+      "fraction": 0.5,
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.2,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.05,
+      "funding_mode": "borrow"
+    },
+    "margin30_rate8": {
+      "trade_bps": 2.0,
+      "roll_roundtrip_bps": 2.0,
+      "rolls_per_year": 4.0,
+      "policy": "full",
+      "buffer": 0.1,
+      "fraction": 0.5,
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.3,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.08,
+      "funding_mode": "borrow"
+    },
+    "margin20_no_borrow": {
+      "trade_bps": 2.0,
+      "roll_roundtrip_bps": 2.0,
+      "rolls_per_year": 4.0,
+      "policy": "full",
+      "buffer": 0.1,
+      "fraction": 0.5,
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.2,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.05,
+      "funding_mode": "scale"
+    }
   },
   "policies": {
     "full": {
@@ -72,7 +130,11 @@
       "policy": "full",
       "buffer": 0.1,
       "fraction": 0.5,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     },
     "buffer_0.05": {
       "trade_bps": 2.0,
@@ -81,7 +143,11 @@
       "policy": "buffer",
       "buffer": 0.05,
       "fraction": 0.5,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     },
     "buffer_0.10": {
       "trade_bps": 2.0,
@@ -90,7 +156,11 @@
       "policy": "buffer",
       "buffer": 0.1,
       "fraction": 0.5,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     },
     "buffer_0.20": {
       "trade_bps": 2.0,
@@ -99,7 +169,11 @@
       "policy": "buffer",
       "buffer": 0.2,
       "fraction": 0.5,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     },
     "partial_0.25": {
       "trade_bps": 2.0,
@@ -108,7 +182,11 @@
       "policy": "partial",
       "buffer": 0.1,
       "fraction": 0.25,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     },
     "partial_0.50": {
       "trade_bps": 2.0,
@@ -117,7 +195,11 @@
       "policy": "partial",
       "buffer": 0.1,
       "fraction": 0.5,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     },
     "partial_0.75": {
       "trade_bps": 2.0,
@@ -126,7 +208,11 @@
       "policy": "partial",
       "buffer": 0.1,
       "fraction": 0.75,
-      "max_risk_ratio": 1.25
+      "max_risk_ratio": 1.25,
+      "margin_rate": 0.0,
+      "cash_buffer": 0.2,
+      "financing_rate": 0.0,
+      "funding_mode": "borrow"
     }
   },
   "selected_policy": "full",
@@ -137,7 +223,11 @@
     "policy": "full",
     "buffer": 0.1,
     "fraction": 0.5,
-    "max_risk_ratio": 1.25
+    "max_risk_ratio": 1.25,
+    "margin_rate": 0.0,
+    "cash_buffer": 0.2,
+    "financing_rate": 0.0,
+    "funding_mode": "borrow"
   },
   "selection": "Highest net training Sharpe through 1999; lower turnover breaks ties",
   "common_start": "1976-02-27",
@@ -148,7 +238,7 @@
   "sha256": {
     "MonthlyReturns.csv": "8a24972f8631e511bb6ad31c8053ca34a84f9c3769893d9a95628005b1c83652",
     "data\\AssetMapCsv.csv": "6b19265b792f305ec4f188656837e5817372f38a4485a3f32ac4e541d1124582",
-    "run_execution_study.py": "fe431b5634ce153d0d4c765f6a2e67042646f13b6aec61212a95f9e8a8e07179",
+    "run_execution_study.py": "511f20c42860c547755da76f9fd154041d1cec9ea2f40131963951a3ce45554d",
     "data\\FuturesUnderlyingData\\AN.csv": "9f64722f7ec6a8821aa94d53e841036261ee3d11d8133280553dd2fb626c81da",
     "data\\FuturesUnderlyingData\\AP.csv": "0a4a87be0b61781ca01134030709a54022e55c3971b45f53ac3fe84737ff4db4",
     "data\\FuturesUnderlyingData\\AX.csv": "571770bcb6107e0196fbe35cd82861ba08aab1c3f97d20a8212e3c10208bb2cc",
@@ -217,7 +307,7 @@
     "cta_backtest\\data.py": "397ba01e8946c6f4faba04a5b637a050d19f22a04a694a188617d9bd9f2a7fbe",
     "cta_backtest\\engine.py": "4f3aeaf82eddd6d8c6caec4f7902cf2af832b0285272ea6dfb48a8c1389e3d1c",
     "cta_backtest\\evaluation.py": "2e6430b3759efa02c56d546b94ee883a9c83310fd727be5152695b3b025282f8",
-    "cta_backtest\\execution.py": "8b078979af20b890e86823f659f10a165c0dc78390dad4bf6d9b25daee3d1938",
+    "cta_backtest\\execution.py": "8aa8c745731ee9842f1a256a3014be9646ae74497d8862a4155adfb78d753d4c",
     "cta_backtest\\metrics.py": "498175b0a201e72a3ac99bdacb2e260eea52b6a81d7d9932f432d329a6603e97",
     "cta_backtest\\risk.py": "4930ac0fea74d11a57f2b9dece66c2a128464201ba345d272547182f96e0b777",
     "cta_backtest\\riskmodel.py": "5e50a88523859446f5e903f9c017c28195a80f2654b7d705b1cd510385eb5f49",
