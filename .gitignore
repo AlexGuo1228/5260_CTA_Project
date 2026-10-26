@@ -13,3 +13,14 @@ venv/
 .DS_Store
 Thumbs.db
 .pytest_cache/
+
+# Local presentation build intermediates (keep deliverables in presentation/)
+.chart-data-*/
+.data_deck_build/
+
+# Local submission note and generated archive
+/SUBMISSION_GUIDE.md
+/ORIE5260_Midterm_Submission_*.zip
+
+# Local Chinese team handoff (not for GitHub)
+/docs/WEEKLY_UPDATE.md
